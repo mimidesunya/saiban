@@ -9,11 +9,11 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="google.generat
 import google.generativeai as genai
 import pyperclip
 from lib.pdf_converter import convert_html_to_pdf
+from lib import gemini_client
 
 # 設定
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
-CONFIG_PATH = os.path.join(PROJECT_ROOT, 'ai_config.json')
 INSTRUCTION_PATH = os.path.join(BASE_DIR, 'instructions', 'ai_instruction.md')
 
 # デフォルト値
@@ -22,15 +22,7 @@ DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'output')
 DEFAULT_MAIN_HTML = 'text.html'
 
 def load_config():
-    if not os.path.exists(CONFIG_PATH):
-        print(f"警告: 設定ファイル {CONFIG_PATH} が見つかりません。")
-        return None
-    try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"設定ファイルの読み込みエラー: {e}")
-        return None
+    return gemini_client.load_config()
 
 def load_instruction():
     if not os.path.exists(INSTRUCTION_PATH):
@@ -44,17 +36,15 @@ def load_instruction():
         return ""
 
 def generate_html_with_gemini(text, config):
-    if not config or 'gemini' not in config:
-        print("Geminiの設定が見つかりません。")
-        return None
-
-    gemini_config = config['gemini']
-    api_key = gemini_config.get('apiKey')
-    model_name = gemini_config.get('textModel', 'gemini-pro')
-
+    # configはload_config()で取得済みだが、APIキー取得にはgemini_clientを使用する
+    api_key = gemini_client.get_api_key()
+    
     if not api_key:
         print("Gemini APIキーが設定されていません。")
         return None
+
+    gemini_config = config.get('gemini', {}) if config else {}
+    model_name = gemini_config.get('textModel', 'gemini-pro')
 
     genai.configure(api_key=api_key)
     

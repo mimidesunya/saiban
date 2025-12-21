@@ -28,27 +28,65 @@ python setup.py
 
 ### PDFの生成
 
-以下のコマンドを実行して、`src/template/text.html` をPDFに変換します。
+#### 1. ドラッグ＆ドロップで変換
+`bin/generate_court_pdf.bat` に、変換したいテキストファイルまたはHTMLファイルをドラッグ＆ドロップしてください。
 
+#### 2. クリップボードから変換 / AI生成
+`bin/generate_court_pdf.bat` をダブルクリックして実行すると、インタラクティブモードが起動します。
+クリップボードにコピーされたテキストを元に、AI (Gemini) を使用して裁判書面形式のHTMLを生成し、PDFに変換します。
+※ AI機能を使用するには `ai_config.json` の設定が必要です。
+
+#### 3. コマンドラインから実行
 ```bash
-python src/generate_court_doc.py
+python src/generate_court_doc.py [入力ファイルパス]
 ```
 
-生成されたPDFは `output/result.pdf` に保存されます。
+生成されたPDFは `output/` フォルダに保存されます。
+ファイル名は、文書内のタイトルと日付に基づいて自動生成されます（例: `2025-12-21-準備書面.pdf`）。
+
 なお、変換には公開サーバー `ctip://cti.li/` を使用しています。
+
+### PDF OCR (文字認識)
+
+PDFファイルや画像ファイルをテキスト化（Markdown形式）したい場合は、以下の手順で行います。
+
+#### 1. ドラッグ＆ドロップでOCR
+`bin/ocr_court_doc.bat` に、OCRをかけたいPDFファイルまたはフォルダをドラッグ＆ドロップしてください。
+Gemini APIを使用して文字認識を行い、同じフォルダにJSONファイルとMarkdownファイルを出力します。
+
+## AI設定 (Gemini)
+
+AIによる文書生成機能を使用する場合は、`ai_config.template.json` を `ai_config.json` にリネームし、Google Gemini APIキーを設定してください。
+
+```json
+{
+    "gemini": {
+        "apiKey": "YOUR_API_KEY_HERE",
+        "textModel": "gemini-pro"
+    }
+}
+```
 
 ## フォルダ構成
 
 ```
 .
 ├── src/
-│   ├── generate_court_doc.py   # 裁判文書生成スクリプト
-│   └── template/         # HTML/CSSテンプレート
-│       ├── text.html     # 控訴理由書サンプルHTML
-│       └── style.css     # 裁判書面用CSS (CSS 2.1準拠)
-├── output/               # 生成されたPDFの出力先
-├── setup.py              # ドライバセットアップスクリプト
-└── README.md             # 本ファイル
+│   ├── generate_court_doc.py   # 裁判文書生成メインスクリプト
+│   ├── instructions/           # AIへの指示書
+│   │   └── ai_instruction.md
+│   ├── lib/                    # ライブラリ
+│   │   └── pdf_converter.py    # PDF変換ロジック
+│   └── template/               # HTML/CSSテンプレート
+│       ├── text.html           # サンプルHTML
+│       └── style.css           # 裁判書面用CSS (CSS 2.1準拠)
+├── output/                     # 生成されたPDFの出力先
+├── ai_config.json              # AI設定ファイル (要作成)
+├── bin/
+│   ├── generate_court_pdf.bat  # 裁判文書生成用バッチ
+│   └── ocr_court_doc.bat       # OCR用バッチ
+├── setup.py                    # ドライバセットアップスクリプト
+└── README.md                   # 本ファイル
 ```
 
 ## 前提条件
