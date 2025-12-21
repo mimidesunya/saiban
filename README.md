@@ -84,7 +84,7 @@ AIによる文書生成機能を使用する場合は、`ai_config.template.json
 ├── ai_config.json              # AI設定ファイル (要作成)
 ├── bin/
 │   ├── generate_court_pdf.bat  # 裁判文書生成用バッチ
-│   └── ocr_court_doc.bat       # OCR用バッチ
+│   └── ocr_doc.bat       # OCR用バッチ
 ├── setup.py                    # ドライバセットアップスクリプト
 └── README.md                   # 本ファイル
 ```

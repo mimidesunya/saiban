@@ -8,7 +8,7 @@ REM .venvが存在するか確認し、あれば使用する。なければグ�
 if exist ".venv\Scripts\python.exe" (
     ".venv\Scripts\python.exe" "src\generate_court_doc.py" "%TARGET_FILE%"
 ) else (
-    python "src\generate_court_doc.py" "%TARGET_FILE%"
+    python3 "src\generate_court_doc.py" "%TARGET_FILE%"
 )
 
 pause

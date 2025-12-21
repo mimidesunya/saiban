@@ -351,8 +351,13 @@ def pdf_to_text(pdf_path: Path, batch_size: int = 5, start_page: int = 1, end_pa
         end_page (int | None): 終了ページ番号（1開始）。Noneの場合は最終ページまで。
     """
     if not pdf_path.exists():
-        print(f"[ERROR] PDF file not found: {pdf_path}")
-        return
+        # 拡張子が省略されている場合や、誤って削除された場合のフォールバック
+        if pdf_path.with_suffix(".pdf").exists():
+            pdf_path = pdf_path.with_suffix(".pdf")
+            print(f"[INFO] Found file with .pdf extension: {pdf_path}")
+        else:
+            print(f"[ERROR] PDF file not found: {pdf_path}")
+            return
 
     # 出力先はPDFと同じ場所で拡張子を.jsonに変更
     output_json_path = pdf_path.with_suffix(".json")
