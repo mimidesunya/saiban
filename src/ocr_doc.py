@@ -1,12 +1,12 @@
 """
-Gemini APIを使用してPDFファイルのOCR（文字認識）を行い、構造化されたJSONデータを出力するプログラム。
-PDFの各ページを抽出し、Geminiに送信してテキストとその位置情報を抽出します。
+Gemini APIを使用してPDFファイルのOCR（文字認識）を行い、Markdownデータを出力するプログラム。
+PDFの各ページを抽出し、Geminiに送信してテキストを抽出します。
 コマンドラインから実行し、ファイルまたはディレクトリを指定してまとめて処理できます。
 
 Usage:
     python ocr_doc.py <PDF_PATH_OR_DIR> [--batch_size <NUMBER>] [--start_page <NUMBER>] [--end_page <NUMBER>]
 
-出力は、各PDFと同じディレクトリに .json 拡張子で保存されます。
+出力は、各PDFと同じディレクトリに .md 拡張子で保存されます。
 """
 
 import sys
@@ -14,20 +14,20 @@ import argparse
 from pathlib import Path
 
 try:
-    from lib.pdf_processor import pdf_to_text
+    from lib.pdf_to_markdown import pdf_to_text, COURT_DOC_STYLE
 except ImportError:
     # For when running from a different directory or as a module
     try:
-        from .lib.pdf_processor import pdf_to_text
+        from .lib.pdf_to_markdown import pdf_to_text, COURT_DOC_STYLE
     except ImportError:
         # Fallback if running directly from src
         import sys
         sys.path.append(str(Path(__file__).resolve().parent))
-        from lib.pdf_processor import pdf_to_text
+        from lib.pdf_to_markdown import pdf_to_text, COURT_DOC_STYLE
 
 if __name__ == "__main__":
     # コマンドライン引数の解析
-    parser = argparse.ArgumentParser(description="Gemini Batch APIを使用してPDFのOCRを行い、構造化JSONを出力します。")
+    parser = argparse.ArgumentParser(description="Gemini Batch APIを使用してPDFのOCRを行い、Markdownを出力します。")
     parser.add_argument("input_path", type=str, help="処理対象のPDFファイルパスまたはディレクトリパス")
     parser.add_argument("--batch_size", type=int, default=1, help="一度に処理するページ数 (デフォルト: 1)")
     parser.add_argument("--start_page", type=int, default=1, help="開始ページ番号 (1開始, デフォルト: 1)")
@@ -50,7 +50,8 @@ if __name__ == "__main__":
                 pdf_file, 
                 batch_size=args.batch_size, 
                 start_page=args.start_page, 
-                end_page=args.end_page
+                end_page=args.end_page,
+                context_instruction=COURT_DOC_STYLE
             )
     else:
         # 単一ファイルの処理
@@ -58,5 +59,6 @@ if __name__ == "__main__":
             input_path, 
             batch_size=args.batch_size, 
             start_page=args.start_page, 
-            end_page=args.end_page
+            end_page=args.end_page,
+            context_instruction=COURT_DOC_STYLE
         )

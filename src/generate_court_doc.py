@@ -14,10 +14,11 @@ from lib import gemini_client
 # 設定
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
-INSTRUCTION_PATH = os.path.join(BASE_DIR, 'instructions', 'ai_instruction.md')
+INSTRUCTION_PATH = os.path.join(BASE_DIR, 'base', 'ai_instruction.md')
 
 # デフォルト値
-DEFAULT_TEMPLATE_DIR = os.path.join(BASE_DIR, 'template')
+# 基本テンプレートは src/base に配置
+DEFAULT_TEMPLATE_DIR = os.path.join(BASE_DIR, 'base')
 DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'output')
 DEFAULT_MAIN_HTML = 'text.html'
 
@@ -198,6 +199,19 @@ def main():
 
     # 3. PDF変換
     convert_html_to_pdf(html_to_convert, output_pdf_path, resource_dir, default_template_dir=DEFAULT_TEMPLATE_DIR)
+
+    # 4. PDFを開く
+    if os.path.exists(output_pdf_path):
+        print(f"PDFを開きます: {output_pdf_path}")
+        try:
+            if sys.platform == 'win32':
+                os.startfile(output_pdf_path)
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', output_pdf_path], check=True)
+            else:
+                subprocess.run(['xdg-open', output_pdf_path], check=True)
+        except Exception as e:
+            print(f"PDFを開けませんでした: {e}")
 
 if __name__ == '__main__':
     main()

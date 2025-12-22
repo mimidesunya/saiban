@@ -12,7 +12,8 @@ def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(base_dir)
     
-    template_dir = os.path.join(base_dir, 'template')
+    # 基本テンプレートは src/base に配置
+    template_dir = os.path.join(base_dir, 'base')
     input_html = os.path.join(template_dir, 'text.html')
     output_dir = os.path.join(project_root, 'output')
     output_pdf = os.path.join(output_dir, 'preview_template.pdf')

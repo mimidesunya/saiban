@@ -16,47 +16,40 @@
 
 ## セットアップ
 
-### Copper PDF ドライバのインストール
+### 初期設定
 
-以下のコマンドを実行して、Copper PDFのPythonドライバを自動的にダウンロード・インストールします。
+以下のコマンドを実行して、Copper PDFドライバのインストールと、AI指示書の生成を行います。
 
 ```bash
 python setup.py
 ```
 
-このスクリプトは、ドライバをダウンロードし、現在のPython環境にインストールします。
+*   **ドライバ**: Copper PDFのPythonドライバが未インストールの場合は自動的にインストールされます。
+*   **AI指示書**: `src/templates` 内のHTMLテンプレートと `src/base/ai_instruction.md` を結合し、`instructions/` フォルダに個別の指示書（Markdown）を生成します。
 
-### PDFの生成
+## 機能と使い方 (binフォルダ内のバッチファイル)
 
-#### 1. ドラッグ＆ドロップで変換
-`bin/generate_court_pdf.bat` に、変換したいテキストファイルまたはHTMLファイルをドラッグ＆ドロップしてください。
+`bin` フォルダ内のバッチファイルを使用して各機能を実行できます。
 
-#### 2. クリップボードから変換 / AI生成
-`bin/generate_court_pdf.bat` をダブルクリックして実行すると、インタラクティブモードが起動します。
-クリップボードにコピーされたテキストを元に、AI (Gemini) を使用して裁判書面形式のHTMLを生成し、PDFに変換します。
+### 1. 裁判資料PDF作成 (`bin/裁判資料PDF作成.bat`)
+テキストファイルやHTMLファイルをドラッグ＆ドロップすると、PDFに変換します。
+ダブルクリックして実行すると、クリップボードのテキストを元にAI (Gemini) がHTMLを生成し、PDF化します。
 ※ AI機能を使用するには `ai_config.json` の設定が必要です。
 
-#### 3. コマンドラインから実行
-```bash
-python src/generate_court_doc.py [入力ファイルパス]
-```
+### 2. 文書OCR (`bin/文書OCR.bat`)
+PDFファイルや画像フォルダをドラッグ＆ドロップすると、Gemini APIを使用して高精度なOCRを行います。
+結果はMarkdown形式で保存されます。
 
-生成されたPDFは `output/` フォルダに保存されます。
-ファイル名は、文書内のタイトルと日付に基づいて自動生成されます（例: `2025-12-21-準備書面.pdf`）。
+### 3. ページ区切り除去 (`bin/ページ区切り除去.bat`)
+OCRで生成されたMarkdownファイルをドラッグ＆ドロップすると、ページ区切り（`=-- Begin Page...`）を除去し、段落を適切に結合して整形します。
 
-なお、変換には公開サーバー `ctip://cti.li/` を使用しています。
-
-### PDF OCR (文字認識)
-
-PDFファイルや画像ファイルをテキスト化（Markdown形式）したい場合は、以下の手順で行います。
-
-#### 1. ドラッグ＆ドロップでOCR
-`bin/ocr_court_doc.bat` に、OCRをかけたいPDFファイルまたはフォルダをドラッグ＆ドロップしてください。
-Gemini APIを使用して文字認識を行い、同じフォルダにJSONファイルとMarkdownファイルを出力します。
+### 4. テンプレートプレビュー (`bin/テンプレートプレビュー.bat`)
+基本テンプレート（`src/base/text.html`）をPDFに変換してプレビュー表示します。
+スタイルの調整確認に使用します。
 
 ## AI設定 (Gemini)
 
-AIによる文書生成機能を使用する場合は、`ai_config.template.json` を `ai_config.json` にリネームし、Google Gemini APIキーを設定してください。
+AI機能を使用する場合は、`ai_config.template.json` を `ai_config.json` にリネームし、Google Gemini APIキーを設定してください。
 
 ```json
 {
@@ -72,20 +65,18 @@ AIによる文書生成機能を使用する場合は、`ai_config.template.json
 ```
 .
 ├── src/
-│   ├── generate_court_doc.py   # 裁判文書生成メインスクリプト
-│   ├── instructions/           # AIへの指示書
-│   │   └── ai_instruction.md
+│   ├── base/                   # 基本テンプレート (text.html, style.css) と AI指示書ひな形 (ai_instruction.md)
+│   ├── templates/              # 各種書面テンプレート (控訴状.htmlなど)
 │   ├── lib/                    # ライブラリ
-│   │   └── pdf_converter.py    # PDF変換ロジック
-│   └── template/               # HTML/CSSテンプレート
-│       ├── text.html           # サンプルHTML
-│       └── style.css           # 裁判書面用CSS (CSS 2.1準拠)
+│   ├── generate_court_doc.py   # 文書生成スクリプト
+│   ├── ocr_doc.py              # OCRスクリプト
+│   ├── remove_page_breaks.py   # ページ区切り除去スクリプト
+│   └── preview_template.py     # プレビュースクリプト
+├── instructions/               # 生成されたAI指示書 (setup.pyで生成)
 ├── output/                     # 生成されたPDFの出力先
-├── ai_config.json              # AI設定ファイル (要作成)
-├── bin/
-│   ├── generate_court_pdf.bat  # 裁判文書生成用バッチ
-│   └── ocr_doc.bat       # OCR用バッチ
-├── setup.py                    # ドライバセットアップスクリプト
+├── bin/                        # 実行用バッチファイル群
+├── ai_config.json              # AI設定ファイル
+├── setup.py                    # セットアップ＆指示書生成スクリプト
 └── README.md                   # 本ファイル
 ```
 
@@ -93,9 +84,3 @@ AIによる文書生成機能を使用する場合は、`ai_config.template.json
 
 1.  Python 3.x がインストールされていること。
 2.  インターネット接続があること（公開サーバー `cti.li` を使用するため）。
-
-## 今後の予定
-
-*   基本的な書面（訴状など）のHTMLテンプレート作成
-*   縦書き・横書き対応のCSS設計
-*   Pythonによるデータ挿入とPDF変換スクリプトの実装

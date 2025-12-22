@@ -4,6 +4,7 @@ import zipfile
 import subprocess
 import shutil
 import sys
+import re
 
 DRIVER_URL = "https://dl.cssj.jp/release/driver/cti-python-3_0_0.zip"
 ZIP_FILENAME = "cti-python-3_0_0.zip"
@@ -74,8 +75,75 @@ def cleanup():
         shutil.rmtree(EXTRACT_DIR)
     print("Cleanup complete.")
 
+def generate_instructions():
+    print("Generating AI instructions...")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.join(base_dir, "src")
+    
+    # Templates are in src/templates
+    templates_dirs = [
+        os.path.join(src_dir, "templates")
+    ]
+    
+    # Output directory is 'instructions' at root
+    output_dir = os.path.join(base_dir, "instructions")
+    instruction_file = os.path.join(src_dir, "base", "ai_instruction.md")
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    with open(instruction_file, "r", encoding="utf-8") as f:
+        instruction_content = f.read()
+
+    # Regex to find the HTML code block
+    pattern = re.compile(r"(```html\n)([\s\S]*?)(\n```)")
+
+    # Find HTML files
+    template_files = []
+    for t_dir in templates_dirs:
+        if os.path.exists(t_dir):
+            for root, dirs, files in os.walk(t_dir):
+                for file in files:
+                    if file.endswith(".html"):
+                        template_files.append(os.path.join(root, file))
+
+    for template_path in template_files:
+        with open(template_path, "r", encoding="utf-8") as f:
+            template_html = f.read()
+        
+        # Replace content
+        new_content = pattern.sub(lambda m: m.group(1) + template_html + m.group(3), instruction_content)
+        
+        # Determine output filename
+        # User wants "控訴状.md"
+        filename = os.path.basename(template_path)
+        name_without_ext = os.path.splitext(filename)[0]
+        
+        output_filename = f"{name_without_ext}.md"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        print(f"Generated {output_filename}")
+
+    print("Instruction generation complete.")
+
+def is_driver_installed():
+    try:
+        # Check if cti-python is in the installed packages list
+        result = subprocess.check_output([sys.executable, "-m", "pip", "list"], encoding='utf-8')
+        return "cti-python" in result
+    except subprocess.CalledProcessError:
+        return False
+
 if __name__ == "__main__":
-    download_driver()
-    extract_driver()
-    install_driver()
-    cleanup()
+    if not is_driver_installed():
+        print("Driver not found. Installing...")
+        download_driver()
+        extract_driver()
+        install_driver()
+        cleanup()
+    else:
+        print("Driver (cti-python) is already installed.")
+
+    generate_instructions()
