@@ -3,9 +3,10 @@ import re
 import argparse
 from pathlib import Path
 
-def remove_page_breaks(file_path: Path):
+def merge_ocr_pages(file_path: Path):
     """
-    Markdownファイルからページ区切りマーカーを削除し、_clean.md として保存する。
+    OCRで出力されたMarkdownファイルからページ区切りマーカーを処理（結合・削除）し、
+    整形された _clean.md ファイルとして保存する。
     """
     if not file_path.exists():
         print(f"[ERROR] File not found: {file_path}")
@@ -19,15 +20,15 @@ def remove_page_breaks(file_path: Path):
         # パターン: =-- End Printed Page ... --= (改行/空白) =-- Begin Page ... --=
         # どちらかに (Continuation) があれば結合する
         
-        boundary_pattern = r'(=-- End Printed Page [^\n]*? --=)(\s*?)(=-- Begin Page [^\n]*? --=)'
+        # 境界マーカーとその前後の空白（改行含む）をマッチさせる
+        boundary_pattern = r'\s*(=-- End Printed Page [^\n]*? --=)\s*(=-- Begin Page [^\n]*? --=)\s*'
         
         def replace_boundary(match):
             end_marker = match.group(1)
-            whitespace = match.group(2)
-            begin_marker = match.group(3)
+            begin_marker = match.group(2)
             
             if "(Continuation)" in end_marker or "(Continuation)" in begin_marker:
-                # Continuationがある場合は、マーカーと間の空白を全て削除（段落結合）
+                # Continuationがある場合は、マーカーとその前後の空白を全て削除（段落結合）
                 return ""
             else:
                 # Continuationがない場合は、マーカーを削除し、空行(段落区切り)を入れる
@@ -50,8 +51,11 @@ def remove_page_breaks(file_path: Path):
         # 3つ以上の連続する改行を2つ（1つの空行）に置換して整える
         new_content = re.sub(r'\n{3,}', '\n\n', new_content)
         
-        # 出力ファイル名 (例: file.md -> file_clean.md)
-        output_path = file_path.with_name(file_path.stem + "_clean" + file_path.suffix)
+        # 出力ファイル名 (例: file_paged.md -> file.md)
+        if file_path.name.endswith("_paged.md"):
+            output_path = file_path.with_name(file_path.name.replace("_paged.md", ".md"))
+        else:
+            output_path = file_path.with_name(file_path.stem + "_merged" + file_path.suffix)
         
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(new_content)
@@ -62,19 +66,23 @@ def remove_page_breaks(file_path: Path):
         print(f"[ERROR] Failed to process {file_path}: {e}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Remove page break markers from Markdown files.")
-    parser.add_argument("input_path", type=str, help="Input Markdown file or directory")
+    parser = argparse.ArgumentParser(description="OCRで出力されたMarkdownのページ区切りを処理し、テキストを結合・整形します。")
+    parser.add_argument("input_path", type=str, help="対象のMarkdownファイルまたはディレクトリ")
     
     args = parser.parse_args()
     input_path = Path(args.input_path)
     
     if input_path.is_dir():
-        md_files = list(input_path.glob("*.md"))
+        md_files = list(input_path.glob("*_paged.md"))
+        if not md_files:
+            # _paged.md が見つからない場合は全ての .md を対象にする
+            md_files = list(input_path.glob("*.md"))
+            
         print(f"[INFO] Found {len(md_files)} Markdown files in {input_path}")
         for md_file in md_files:
-            # _clean.md はスキップする
-            if md_file.name.endswith("_clean.md"):
+            # 既に処理済みのファイルや、意図しないファイルを除外
+            if md_file.name.endswith("_merged.md") or md_file.name.endswith("_clean.md"):
                 continue
-            remove_page_breaks(md_file)
+            merge_ocr_pages(md_file)
     else:
-        remove_page_breaks(input_path)
+        merge_ocr_pages(input_path)

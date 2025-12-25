@@ -11,5 +11,3 @@ if exist ".venv\Scripts\python.exe" (
 ) else (
     python "src\preview_template.py"
 )
-
-pause

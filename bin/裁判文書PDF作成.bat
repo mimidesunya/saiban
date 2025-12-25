@@ -11,4 +11,3 @@ if exist ".venv\Scripts\python.exe" (
     python3 "src\generate_court_doc.py" "%TARGET_FILE%"
 )
 
-pause

@@ -69,12 +69,18 @@ AI機能を使用する場合は、`ai_config.template.json` を `ai_config.json
 │   ├── templates/              # 各種書面テンプレート (控訴状.htmlなど)
 │   ├── lib/                    # ライブラリ
 │   ├── generate_court_doc.py   # 文書生成スクリプト
-│   ├── ocr_doc.py              # OCRスクリプト
-│   ├── remove_page_breaks.py   # ページ区切り除去スクリプト
+│   ├── ocr_court_doc.py        # 裁判文書OCRスクリプト
+│   ├── ocr_general_doc.py      # 一般文書OCRスクリプト
+│   ├── ocr_merge_pages.py      # OCRページ結合スクリプト
 │   └── preview_template.py     # プレビュースクリプト
 ├── instructions/               # 生成されたAI指示書 (setup.pyで生成)
 ├── output/                     # 生成されたPDFの出力先
 ├── bin/                        # 実行用バッチファイル群
+│   ├── 裁判文書PDF作成.bat
+│   ├── 裁判文書OCR.bat         # 裁判文書用OCR
+│   ├── 一般文書OCR.bat         # 一般文書用OCR
+│   ├── OCRページ結合.bat       # OCR後のページ結合・整形
+│   └── テンプレートプレビュー.bat
 ├── ai_config.json              # AI設定ファイル
 ├── setup.py                    # セットアップ＆指示書生成スクリプト
 └── README.md                   # 本ファイル

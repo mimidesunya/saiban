@@ -18,9 +18,9 @@ if "%TARGET_FILE%"=="" (
 
 REM .venvが存在するか確認し、あれば使用する。なければグローバルなpythonを使用する
 if exist ".venv\Scripts\python.exe" (
-    ".venv\Scripts\python.exe" "src\ocr_doc.py" "%TARGET_FILE%"
+    ".venv\Scripts\python.exe" "src\ocr_general_doc.py" "%TARGET_FILE%"
 ) else (
-    python3 "src\ocr_doc.py" "%TARGET_FILE%"
+    python3 "src\ocr_general_doc.py" "%TARGET_FILE%"
 )
 
 pause

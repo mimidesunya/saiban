@@ -5,6 +5,19 @@
    本CSSファイルは、PDF生成エンジン（Copper PDF）との互換性を確保するため、
    原則として CSS 2.1 に準拠した記述を行ってください。
 */
+@page {
+    counter-increment: page;
+}
+body:before {
+    -cssj-page-content: footer;
+    bottom: -15mm;
+    text-align: center;
+    width: 100%;
+    content: '- ' counter(page) ' -';
+}
+@page {
+    margin: 35mm 20mm 27mm 30mm;
+}
 
 /* =========================================
    基本設定 (Basic Document Settings)
@@ -12,8 +25,7 @@
    ========================================= */
 body {
     color: #000;
-    /* Copper PDFのデフォルト余白(12.7mm)を差し引いた値 */
-    margin: 22.3mm 7.3mm 17.3mm 17.3mm; /* 上 右 下 左 */
+    margin: 0;
     background-color: #fff;
 }
 * {

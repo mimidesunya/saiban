@@ -21,29 +21,37 @@ MODEL_ID = "gemini-3-flash-preview"
 MAX_RETRIES = gemini_client.MAX_RETRIES
 INITIAL_RETRY_DELAY = gemini_client.INITIAL_RETRY_DELAY
 
-# 日本の裁判文書のスタイル定義
-COURT_DOC_STYLE = """
-# CONTEXT: Japanese Court Document
-- **Format**: Horizontal text. Ignore line numbers, punch holes, stamps, and page numbers (including surrounding symbols like "- 1 -") in margins.
-- **Spaced Text**: Remove wide spacing in titles (e.g., "陳　述　書" -> "**陳述書**").
-- **Line Breaks**: CRITICAL. Merge lines within paragraphs. Only break lines at clear paragraph ends or headings.
+def get_ocr_prompt(num_pages: int, context_instruction: str = "") -> str:
+    """
+    OCR用のプロンプトを生成する。
+    """
+    return f"""
+# ROLE
+High-precision OCR engine converting Japanese PDF pages to clean Markdown.
 
-# STRUCTURE & HEADINGS
-1. **Decision: Heading or Paragraph?** (Apply this FIRST)
-   - **Paragraph**: If the text following the number/marker is a long sentence (often ends with "。") or spans multiple lines, it is a **Paragraph**. Do NOT use `#`.
-   - **Paragraph**: If you see consecutive items of the same level (e.g., "1 ...", "2 ..." or "ア ...", "イ ..."), they are **Paragraphs**. Do NOT use `#`.
-   - **Heading**: Only if the text is short (a title), usually has no punctuation at the end, and is followed by body text on the next line.
+{context_instruction}
 
-2. **Heading Hierarchy** (Apply ONLY if it is a Heading)
-   - "第1", "第2" ... -> H1 (`#`)
-   - "1", "2" ... -> H2 (`##`)
-   - "(1)", "(2)" ... -> H3 (`###`)
-   - "ア", "イ" ... -> H4 (`####`)
-   - "(ア)", "(イ)" ... -> H5 (`#####`)
+# INPUT
+{num_pages} pages of a Japanese document.
 
-3. **Formatting Rules**
-   - **No Numbering = No Heading**: Text like "事実及び理由" or "主文" must be **Bold** (`**text**`).
-   - **Numbering Style**: Use standard paragraphs starting with the number (e.g., "1 被告は..."). Do NOT use Markdown lists (`1. ...`).
+# OUTPUT RULES
+1. **Markdown Only**: No conversational text.
+2. **No Skipping**: Even if the first page starts mid-sentence or mid-paragraph (continuation from a previous unprovided page), transcribe it completely from the very first character.
+3. **Page Markers**:
+   - **Start**: At the start of content, output `=-- Begin Page N {{StartStatus}} --=`.
+     - N: Batch page index (1-{num_pages}).
+     - {{StartStatus}}: "(Continuation)" if the text at the very top of the page is a continuation of a paragraph from a previous (possibly unprovided) page, else empty.
+   - **End**: At the end of content, output `=-- End Printed Page X {{EndStatus}} --=`.
+     - X: Printed page number. **CONVERT** Kanji (一, 二) or Roman (I, II) to Arabic (1, 2). If not found, use "N/A".
+     - {{EndStatus}}: "(Continuation)" if paragraph continues to next page, else empty.
+4. **Transcription Rules**:
+   - **No Indentation**: Standard Markdown paragraphs.
+   - **Numbers**: Convert ALL full-width numbers to half-width (e.g., "１" -> "1"). Also convert Kanji numerals used as counts or identifiers to Arabic numerals where appropriate for clarity, but keep them if they are part of a formal name.
+   - **Corrections**: Fix obvious OCR errors (0 vs O). Keep original typos with `［ママ］`.
+   - **Exclusions**: Omit printed page numbers from body.
+   - **Margins**:
+     - Headings in margins: Format as `【#Text】`.
+     - Annotations/Notes in margins: Format as `【*Text】`.
 """
 
 def run_batch_api_ocr(batch_tasks: list, generation_config: types.GenerateContentConfig, context_instruction: str = "") -> list[tuple[list[int], str]]:
@@ -80,30 +88,8 @@ def run_batch_api_ocr(batch_tasks: list, generation_config: types.GenerateConten
         for page_mapping, b_bytes, retry_count in tasks_to_process:
             # AIには常に1ページ目からの相対的な番号で処理させる
             num_pages = len(page_mapping)
-            prompt = f"""
-# ROLE
-High-precision OCR engine converting Japanese PDF pages to clean Markdown.
-
-{context_instruction}
-
-# INPUT
-{num_pages} pages of a Japanese document.
-
-# OUTPUT RULES
-1. **Markdown Only**: No conversational text.
-2. **Page Markers**:
-   - **Start**: At the start of content, output `=-- Begin Page N {{StartStatus}} --=`.
-     - N: Batch page index (1-{num_pages}).
-     - {{StartStatus}}: "(Continuation)" if paragraph continues from previous page, else empty.
-   - **End**: At the end of content, output `=-- End Printed Page X {{EndStatus}} --=`.
-     - X: Printed page number or "N/A".
-     - {{EndStatus}}: "(Continuation)" if paragraph continues to next page, else empty.
-3. **Transcription Rules**:
-   - **No Indentation**: Standard Markdown paragraphs.
-   - **Numbers**: Convert ALL full-width numbers to half-width (e.g., "１" -> "1").
-   - **Corrections**: Fix obvious OCR errors (0 vs O). Keep original typos with `［ママ］`.
-   - **Exclusions**: Omit printed page numbers from body.
-"""
+            prompt = get_ocr_prompt(num_pages, context_instruction)
+            
             # PDFデータをBase64エンコード
             b64_data = base64.b64encode(b_bytes).decode('utf-8')
             
@@ -266,8 +252,8 @@ def pdf_to_text(pdf_path: Path, batch_size: int = 5, start_page: int = 1, end_pa
             print(f"[ERROR] PDFファイルが見つかりません: {pdf_path}")
             return
 
-    # 出力先はPDFと同じ場所で拡張子を.mdに変更
-    output_md_path = pdf_path.with_suffix(".md")
+    # 出力先はPDFと同じ場所で拡張子を _paged.md に変更
+    output_md_path = pdf_path.with_name(pdf_path.stem + "_paged.md")
     
     print(f"[INFO] PDFを開いています: {pdf_path}")
     script_start_time = time.time()
