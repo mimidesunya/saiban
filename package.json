@@ -9,7 +9,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "clipboardy": "^2.3.0",
-    "copper-cti": "file:copper_drivers/cti.nodejs",
+    "copper-cti": "github:mimidesunya/cti.nodejs",
     "pdf-lib": "^1.17.1"
   }
 }

@@ -32,7 +32,7 @@ body {
 }
 
 * {
-    font-family: "MS Mincho", "Hiragino Mincho ProN", serif;
+    font-family: "NotoSerifJP-Regular" "MS Mincho", "Hiragino Mincho ProN", serif;
     font-size: 12pt;
     line-height: 19.4pt; /* 12pt * 1.618 */
 }

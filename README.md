@@ -5,11 +5,11 @@
 ## 概要
 
 日本の裁判書面は、A4縦書き、横書き、行数、文字数、余白などの厳格なフォーマットが求められることがあります。
-本プロジェクトでは、Web技術（HTML/CSS）を用いてこれらのレイアウトを制御し、Pythonスクリプトを通じてデータを流し込み、印刷可能なPDFを生成することを目指します。
+本プロジェクトでは、Web技術（HTML/CSS）を用いてこれらのレイアウトを制御し、Node.jsスクリプトを通じてデータを流し込み、印刷可能なPDFを生成することを目指します。
 
 ## 技術スタック
 
-*   **言語**: Node.js / Python
+*   **言語**: Node.js
 *   **マークアップ**: HTML5
 *   **スタイル**: CSS 2.1 (Copper PDFがサポートする範囲)
 *   **PDFレンダリング**: [Copper PDF](https://copper-pdf.com/) (CTI)
@@ -18,31 +18,34 @@
 
 ### 初期設定
 
-以下のコマンドを実行して、AI指示書の生成を行います。
+以下のコマンドを実行して、依存関係のインストールとAI指示書の生成を行います。
 
 ```bash
+npm install
 node setup.js
 ```
 
-*   **AI指示書**: `src/templates` 内のHTMLテンプレートと `src/base/ai_instruction.md` を結合し、`instructions/` フォルダに個別の指示書（Markdown）を生成します。
+*   **AI指示書**: `src/templates` 内のテンプレートと `src/base/ai_instruction.md` を結合し、`instructions/` フォルダに個別の指示書（Markdown）を生成します。
 
 ## 機能と使い方 (binフォルダ内のバッチファイル)
 
 `bin` フォルダ内のバッチファイルを使用して各機能を実行できます。
 
-### 1. 裁判資料PDF作成 (`bin/裁判資料PDF作成.bat`)
-テキストファイルやHTMLファイルをドラッグ＆ドロップすると、PDFに変換します。
-ダブルクリックして実行すると、クリップボードのテキストを元にAI (Gemini) がHTMLを生成し、PDF化します。
+### 1. 裁判文書PDF作成 (`bin/裁判文書PDF作成.bat`)
+MarkdownファイルやHTMLファイルをドラッグ＆ドロップすると、裁判フォーマットのPDFに変換します。
+
+### 2. 裁判文書AI起案 (`bin/裁判文書AI起案.bat`)
+ダブルクリックして実行すると、クリップボードのテキストを元にAI (Gemini) が裁判文書（Markdown）を生成し、そのままPDF化します。
 ※ AI機能を使用するには `config.json` の設定が必要です。
 
-### 2. 文書OCR (`bin/文書OCR.bat`)
+### 3. 裁判文書OCR / 一般文書OCR (`bin/裁判文書OCR.bat`, `bin/一般文書OCR.bat`)
 PDFファイルや画像フォルダをドラッグ＆ドロップすると、Gemini APIを使用して高精度なOCRを行います。
-結果はMarkdown形式で保存されます。
+裁判文書用は書式を維持し、一般文書用はテキストの抽出を優先します。結果はMarkdown形式で保存されます。
 
-### 3. ページ区切り除去 (`bin/ページ区切り除去.bat`)
+### 4. OCRページ結合 (`bin/OCRページ結合.bat`)
 OCRで生成されたMarkdownファイルをドラッグ＆ドロップすると、ページ区切り（`=-- Begin Page...`）を除去し、段落を適切に結合して整形します。
 
-### 4. テンプレートプレビュー (`bin/テンプレートプレビュー.bat`)
+### 5. テンプレートプレビュー (`bin/テンプレートプレビュー.bat`)
 基本テンプレート（`src/base/base.html`）をPDFに変換してプレビュー表示します。
 スタイルの調整確認に使用します。
 
@@ -54,7 +57,7 @@ AI機能やPDF変換サーバーを使用する場合は、`config.template.json
 {
     "gemini": {
         "apiKey": "YOUR_API_KEY_HERE",
-        "textModel": "gemini-3-flash-preview"
+        "textModel": "gemini-2.0-flash-exp"
     },
     "copper": {
         "serverUri": "ctip://cti.li/",

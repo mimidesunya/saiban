@@ -43,11 +43,7 @@ async function main() {
         // resourceDir is set to templateDir so it can find style.css
         await convertHtmlToPdf(tempHtml, outputPdf, templateDir);
 
-        // 一時ファイルの削除
-        if (fs.existsSync(tempHtml)) {
-            fs.unlinkSync(tempHtml);
-            console.log(`一時ファイルを削除しました: ${tempHtml}`);
-        }
+        console.log(`一時ファイルを保存しました: ${tempHtml}`);
     } catch (err) {
         console.error(`Error during rendering/conversion: ${err}`);
         return;

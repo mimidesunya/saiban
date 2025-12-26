@@ -15,6 +15,9 @@
     "copper": {
         "serverUri": "ctip://cti.li/",
         "user": "user",
-        "password": "kappa"
+        "password": "kappa",
+        "properties": {
+            "output.pdf.version": "1.4A-1"
+        }
     }
 }

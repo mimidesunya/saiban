@@ -17,6 +17,7 @@ async function convertHtmlToPdf(htmlPath, outputPath, resourceDir, defaultTempla
     const serverUri = copperConfig.serverUri || 'ctip://cti.li/';
     const user = copperConfig.user || 'user';
     const password = copperConfig.password || 'kappa';
+    const properties = copperConfig.properties || {};
 
     console.log(`${serverUri} に接続中...`);
     
@@ -36,6 +37,12 @@ async function convertHtmlToPdf(htmlPath, outputPath, resourceDir, defaultTempla
 
         session.setOutputAsFile(outputPath);
         console.log(`出力を設定: ${outputPath}`);
+
+        // 汎用プロパティの設定
+        for (const [name, value] of Object.entries(properties)) {
+            console.log(`プロパティを設定: ${name} = ${value}`);
+            session.setProperty(name, value);
+        }
 
         // リソースリゾルバーの設定
         session.setResolverFunc(async (uri, resource) => {
