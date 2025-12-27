@@ -31,9 +31,9 @@ The level is determined by the marker at the start of each line. Use these marke
 - **Document Title**: Use # before a line WITHOUT a marker (e.g., # 準備書面) to create a main title.
 
 ### Alignment Blocks
-- **### 右**: Starts a right-aligned block (used for dates, signatures, etc.).
-- **### 左**: Starts a left-aligned block (used for case numbers, parties, etc.).
-- **--**: Ends the alignment block.
+- **### --右**: Starts a right-aligned block (used for dates, signatures, etc.).
+- **### --左**: Starts a left-aligned block (used for case numbers, parties, etc.).
+- **### --**: Ends the alignment block.
 
 ### Tables
 Two formats are supported:
@@ -50,7 +50,7 @@ Two formats are supported:
 - **End Mark**: A paragraph containing only 以上 is automatically right-aligned.
 
 ### Page Breaks
-- Use =-- Text --= to insert a page break. The text inside is used for internal reference.
+- Use ### -- Text -- to insert a page break. The text inside is used for internal reference.
 
 ### Continuation
 - Lines without a marker are treated as a continuation of the previous item's level.

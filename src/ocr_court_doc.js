@@ -8,30 +8,19 @@ const fs = require('fs');
 const path = require('path');
 const { pdfToText, getOcrPrompt } = require('./lib/gemini_ocr.js');
 
+const samplePath = path.join(__dirname, 'base', 'sample.md');
+let sampleContent = "";
+try {
+    sampleContent = fs.readFileSync(samplePath, 'utf-8');
+} catch (e) {
+    console.warn(`[WARN] Could not read sample.md at ${samplePath}: ${e.message}`);
+}
+
 const COURT_DOC_STYLE = `
-# CONTEXT: Japanese Court Document
-- **Format**: Horizontal text. Ignore line numbers, punch holes, stamps, and page numbers in margins.
-- **Spaced Text**: Remove wide spacing in titles (e.g., "陳　述　書" -> "**陳述書**").
-- **Line Breaks**: CRITICAL. Merge lines within paragraphs. Only break lines at clear paragraph ends or headings.
+# TARGET OUTPUT STYLE
+Follow the structure and formatting of this example:
 
-# STRUCTURE & HEADINGS
-1. **Decision: Heading or Paragraph?** (Apply this FIRST)
-   - **Paragraph**: If the text following the number/marker is a long sentence (often ends with "。") or spans multiple lines, it is a **Paragraph**. Do NOT use #.
-   - **Paragraph**: If you see consecutive items of the same level (e.g., "1 ...", "2 ...", "ア ...", "イ ...", "a ...", "b ..."), they are **Paragraphs**. Do NOT use #.
-   - **Heading**: Only if the text is short (a title), usually has no punctuation at the end, and is followed by body text on the next line.
-
-2. **Heading Hierarchy** (Apply ONLY if it is a Heading)
-   - "第1", "第2" ... -> H1 (#)
-   - "1", "2" ... -> H2 (##)
-   - "(1)", "(2)" ... -> H3 (###)
-   - "ア", "イ" ... -> H4 (####)
-   - "(ア)", "(イ)" ... -> H5 (#####)
-   - "a", "b" ... -> H6 (######)
-   - "(a)", "(b)" ... -> Bold (**text**)
-
-3. **Formatting Rules**
-   - **No Numbering = No Heading**: Text like "事実及び理由" or "主文" must be **Bold** (**text**).
-   - **Numbering Style**: Use standard paragraphs starting with the number (e.g., "1 被告は..."). Do NOT use Markdown lists (1. ...).
+${sampleContent}
 `;
 
 async function main() {

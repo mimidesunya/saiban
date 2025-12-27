@@ -19,20 +19,20 @@ ${numPages} pages of a Japanese document.
 1. **Markdown Only**: No conversational text.
 2. **No Skipping**: Even if the first page starts mid-sentence or mid-paragraph (continuation from a previous unprovided page), transcribe it completely from the very first character.
 3. **Page Markers**:
-   - **Start**: At the start of content, output \`=-- Begin Page N {StartStatus} --=\`.
+   - **Start**: At the start of content, output \`### -- Begin Page N {StartStatus} --\`.
      - N: Batch page index (1-${numPages}).
      - {StartStatus}: "(Continuation)" if the text at the very top of the page is a direct continuation of a paragraph from the previous page (cut off mid-sentence without a line break), else empty.
-   - **End**: At the end of content, output \`=-- End Printed Page X {EndStatus} --=\`.
-     - X: Printed page number. **CONVERT** Kanji (一, 二) or Roman (I, II) to Arabic (1, 2). If not found, use "N/A".
+   - **End**: At the end of content, output \`### -- End {PrintedPageInfo} {EndStatus} --\`.
+     - {PrintedPageInfo}: "(Printed Page X)" if a printed page number X is found (CONVERT Kanji/Roman to Arabic). If not found, leave empty.
      - {EndStatus}: "(Continuation)" if the paragraph is cut off mid-sentence and continues to the next page without an explicit line break, else empty.
 4. **Transcription Rules**:
    - **No Indentation**: Standard Markdown paragraphs.
    - **Numbers**: Convert ALL full-width numbers to half-width (e.g., "１" -> "1"). 
-   - **Corrections**: Fix obvious OCR errors (0 vs O). Keep original typos with \`［ママ］\`.
+   - **Corrections**: Fix obvious OCR errors (0 vs O). Keep original typos with \`(-- as is)\`.
    - **Exclusions**: Omit printed page numbers from body.
    - **Margins**:
-     - Headings in margins: Format as \`【#Text】\`.
-     - Annotations/Notes in margins: Format as \`【*Text】\`.
+     - Headings text in margins: Format as \`(--# Text)\`.
+     - Annotations/Notes in margins: Format as \`(--* Text)\`.
 `;
 }
 
@@ -58,6 +58,36 @@ function createOcrRequest(pdfBytes, numPages, contextInstruction = "") {
     };
 }
 
+async function runBatches(requests, batchProcessor) {
+    let currentBatchRequests = [];
+    let currentBatchSize = 0;
+    const MAX_BATCH_SIZE = 19 * 1024 * 1024; // 19MB
+    const allResults = [];
+
+    for (const req of requests) {
+        const reqSize = JSON.stringify(req).length;
+        if (currentBatchSize + reqSize > MAX_BATCH_SIZE) {
+            if (currentBatchRequests.length > 0) {
+                console.log(`[INFO] Sending batch job with ${currentBatchRequests.length} requests...`);
+                const results = await batchProcessor.runInlineBatch(currentBatchRequests, MODEL_ID);
+                allResults.push(...results);
+                currentBatchRequests = [];
+                currentBatchSize = 0;
+            }
+        }
+        currentBatchRequests.push(req);
+        currentBatchSize += reqSize;
+    }
+
+    if (currentBatchRequests.length > 0) {
+        console.log(`[INFO] Sending final batch job with ${currentBatchRequests.length} requests...`);
+        const results = await batchProcessor.runInlineBatch(currentBatchRequests, MODEL_ID);
+        allResults.push(...results);
+    }
+    
+    return allResults;
+}
+
 async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, contextInstruction = "") {
     const pdfBuffer = fs.readFileSync(pdfPath);
     const srcDoc = await PDFDocument.load(pdfBuffer);
@@ -73,6 +103,7 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
 
     // 1. Prepare all requests
     const requests = [];
+    const batchMetadata = [];
     
     for (let i = 0; i < pageIndices.length; i += batchSize) {
         const batch = pageIndices.slice(i, i + batchSize);
@@ -86,48 +117,83 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
 
         const batchPdfBytes = await newDoc.save();
         requests.push(createOcrRequest(Buffer.from(batchPdfBytes), batch.length, contextInstruction));
+        batchMetadata.push({ startPage: batch[0], numPages: batch.length });
     }
 
-    // 2. Run Batch(es)
+    // 2. Run Batch(es) with Retry Logic
     const batchProcessor = new GeminiBatchProcessor();
-    let allMarkdown = "";
+    const finalResults = new Array(requests.length).fill(null);
+    let pendingIndices = requests.map((_, i) => i);
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
 
-    let currentBatchRequests = [];
-    let currentBatchSize = 0;
-    const MAX_BATCH_SIZE = 19 * 1024 * 1024; // 19MB
+    while (pendingIndices.length > 0) {
+        if (retryCount >= MAX_RETRIES) {
+            console.error(`[ERROR] Max retries reached. ${pendingIndices.length} batches failed.`);
+            break;
+        }
+        
+        if (retryCount > 0) {
+            console.log(`[INFO] Retrying ${pendingIndices.length} batches (Attempt ${retryCount}/${MAX_RETRIES})...`);
+        }
 
-    const batchResults = [];
+        const currentRequests = pendingIndices.map(i => requests[i]);
+        const batchResults = await runBatches(currentRequests, batchProcessor);
 
-    for (const req of requests) {
-        const reqSize = JSON.stringify(req).length;
-        if (currentBatchSize + reqSize > MAX_BATCH_SIZE) {
-            if (currentBatchRequests.length > 0) {
-                console.log(`[INFO] Sending batch job with ${currentBatchRequests.length} requests...`);
-                const results = await batchProcessor.runInlineBatch(currentBatchRequests, MODEL_ID);
-                batchResults.push(...results);
-                currentBatchRequests = [];
-                currentBatchSize = 0;
+        const nextPendingIndices = [];
+
+        for (let i = 0; i < batchResults.length; i++) {
+            const originalIndex = pendingIndices[i];
+            const result = batchResults[i];
+            const meta = batchMetadata[originalIndex];
+            
+            let success = false;
+            let text = "";
+
+            if (!result.error && result.response?.candidates?.[0]?.content?.parts) {
+                text = result.response.candidates[0].content.parts.map(p => p.text).join('');
+                
+                // Validation
+                const beginCount = (text.match(/### -- Begin Page \d+/g) || []).length;
+                const endCount = (text.match(/### -- End/g) || []).length;
+
+                if (beginCount === meta.numPages && endCount === meta.numPages) {
+                    success = true;
+                } else {
+                    console.warn(`[WARN] Batch ${originalIndex} (Pages ${meta.startPage}-${meta.startPage + meta.numPages - 1}) validation failed. Expected ${meta.numPages} markers, found Begin:${beginCount}, End:${endCount}.`);
+                }
+            } else {
+                console.warn(`[WARN] Batch ${originalIndex} API error: ${JSON.stringify(result.error || "No content")}`);
+            }
+
+            if (success) {
+                finalResults[originalIndex] = text;
+            } else {
+                nextPendingIndices.push(originalIndex);
             }
         }
-        currentBatchRequests.push(req);
-        currentBatchSize += reqSize;
+
+        pendingIndices = nextPendingIndices;
+        retryCount++;
     }
 
-    if (currentBatchRequests.length > 0) {
-        console.log(`[INFO] Sending final batch job with ${currentBatchRequests.length} requests...`);
-        const results = await batchProcessor.runInlineBatch(currentBatchRequests, MODEL_ID);
-        batchResults.push(...results);
-    }
+    // 3. Assemble results
+    let allMarkdown = "";
+    for (let i = 0; i < finalResults.length; i++) {
+        let text = finalResults[i];
+        const meta = batchMetadata[i];
 
-    // 3. Process results
-    for (const result of batchResults) {
-        if (result.error) {
-            console.error(`[ERROR] Batch item failed: ${JSON.stringify(result.error)}`);
-            allMarkdown += "\n\n[ERROR: OCR Failed for this section]\n\n";
-        } else if (result.response && result.response.candidates && result.response.candidates[0].content.parts) {
-             const text = result.response.candidates[0].content.parts.map(p => p.text).join('');
-             allMarkdown += text + "\n\n";
+        if (!text) {
+            text = `\n\n[ERROR: OCR Failed for pages ${meta.startPage}-${meta.startPage + meta.numPages - 1} after retries]\n\n`;
+        } else {
+             // Fix page numbers (Relative -> Absolute)
+             text = text.replace(/=-- Begin Page (\d+)/g, (match, p1) => {
+                 const relativePage = parseInt(p1, 10);
+                 const absolutePage = meta.startPage + relativePage - 1;
+                 return `=-- Begin Page ${absolutePage}`;
+             });
         }
+        allMarkdown += text + "\n\n";
     }
 
     const outputPath = pdfPath.replace(/\.pdf$/i, "_paged.md");

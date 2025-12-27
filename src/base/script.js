@@ -119,7 +119,7 @@ function convertMarkdownToCourtHtml(markdown) {
         if (!trimmedLine) continue;
 
         // 右寄せ・左寄せブロックの開始・終了
-        if (trimmedLine === '### 右') {
+        if (trimmedLine === '### --右') {
             if (inTable) { html += flushTable(); inTable = false; }
             while (lastLevel > 0) { 
                 html += indent(lastLevel - 1) + '</li>' + nl + indent(lastLevel - 1) + '</ol>' + nl; 
@@ -129,7 +129,7 @@ function convertMarkdownToCourtHtml(markdown) {
             inRightBlock = true;
             continue;
         }
-        if (trimmedLine === '### 左') {
+        if (trimmedLine === '### --左') {
             if (inTable) { html += flushTable(); inTable = false; }
             while (lastLevel > 0) { 
                 html += indent(lastLevel - 1) + '</li>' + nl + indent(lastLevel - 1) + '</ol>' + nl; 
@@ -139,7 +139,7 @@ function convertMarkdownToCourtHtml(markdown) {
             inLeftBlock = true;
             continue;
         }
-        if (trimmedLine === '--') {
+        if (trimmedLine === '### --') {
             if (inRightBlock || inLeftBlock) {
                 if (inTable) { html += flushTable(); inTable = false; }
                 while (lastLevel > 0) { 
@@ -181,8 +181,8 @@ function convertMarkdownToCourtHtml(markdown) {
             inTable = false;
         }
 
-        // 改ページマーカーの処理: =-- 任意のテキスト --=
-        if (/^=--.*--=$/.test(trimmedLine)) {
+        // 改ページマーカーの処理: ### -- 任意のテキスト --
+        if (/^### --.*--$/.test(trimmedLine)) {
             // リストを閉じて改ページを挿入
             while (lastLevel > 0) {
                 html += indent(lastLevel - 1) + '</li>' + nl + indent(lastLevel - 1) + '</ol>' + nl;

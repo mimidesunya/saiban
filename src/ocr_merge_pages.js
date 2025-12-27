@@ -22,8 +22,8 @@ function mergeOcrPages(filePath) {
         let content = fs.readFileSync(filePath, 'utf-8');
 
         // 1. 新しいページ区切り形式の処理
-        // パターン: =-- End Printed Page ... --= (改行/空白) =-- Begin Page ... --=
-        const boundaryPattern = /\s*(=-- End Printed Page [\s\S]*? --=)\s*(=-- Begin Page [\s\S]*? --=)\s*/g;
+        // パターン: ### -- End ... -- (改行/空白) ### -- Begin Page ... --
+        const boundaryPattern = /\s*(### -- End [\s\S]*? --)\s*(### -- Begin Page [\s\S]*? --)\s*/g;
         
         content = content.replace(boundaryPattern, (match, endMarker, beginMarker) => {
             if (endMarker.includes("(Continuation)") || beginMarker.includes("(Continuation)")) {
@@ -36,8 +36,8 @@ function mergeOcrPages(filePath) {
         });
 
         // 2. 残った単独のマーカー（ファイルの先頭や末尾など）を削除
-        content = content.replace(/=-- Begin Page [\s\S]*? --=\s*/g, '');
-        content = content.replace(/\s*=-- End Printed Page [\s\S]*? --=/g, '');
+        content = content.replace(/### -- Begin Page [\s\S]*? --\s*/g, '');
+        content = content.replace(/\s*### -- End [\s\S]*? --/g, '');
 
         // 3. 旧形式のマーカー処理
         content = content.replace(/\s*^=-- Page .*?\(Continuation\).*?--=\s*/gm, '');
@@ -54,7 +54,7 @@ function mergeOcrPages(filePath) {
         const stem = path.basename(filePath, ext);
 
         if (fileName.endsWith("_paged.md")) {
-            outputPath = path.join(dirName, fileName.replace("_paged.md", ".md"));
+            outputPath = path.join(dirName, fileName.replace("_paged.md", "_merged.md"));
         } else {
             outputPath = path.join(dirName, stem + "_merged" + ext);
         }
@@ -89,7 +89,7 @@ function main() {
             
         console.log(`[INFO] Found ${mdFiles.length} Markdown files in ${inputPath}`);
         for (const mdFile of mdFiles) {
-            if (mdFile.endsWith("_merged.md") || mdFile.endsWith("_clean.md")) {
+            if (mdFile.endsWith("_merged.md")) {
                 continue;
             }
             mergeOcrPages(mdFile);

@@ -16,5 +16,3 @@ if "%TARGET_FILE%"=="" (
 )
 
 node "src\ocr_merge_pages.js" "%TARGET_FILE%"
-
-pause
