@@ -25,7 +25,7 @@ npm install
 node setup.js
 ```
 
-*   **AI指示書**: `src/templates` 内のテンプレートと `src/base/ai_instruction.md` を結合し、`instructions/` フォルダに個別の指示書（Markdown）を生成します。
+*   **AI指示書**: `src/templates` 内のテンプレートと `src/base/court_doc_rules.md` を結合し、`instructions/` フォルダに個別の指示書（Markdown）を生成します。
 
 ## 機能と使い方 (binフォルダ内のバッチファイル)
 
@@ -72,7 +72,7 @@ AI機能やPDF変換サーバーを使用する場合は、`config.template.json
 ```
 .
 ├── src/
-│   ├── base/                   # 基本テンプレート (base.html, style.css) と AI指示書ひな形 (ai_instruction.md)
+│   ├── base/                   # 基本テンプレート (base.html, style.css) と AI指示書ひな形 (court_doc_rules.md)
 │   ├── templates/              # 各種書面テンプレート (控訴状.mdなど)
 │   ├── lib/                    # ライブラリ (Node.js)
 │   ├── convert_to_pdf.js       # PDF変換スクリプト

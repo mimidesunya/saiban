@@ -2,14 +2,14 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * src/base/ai_instruction.md の中の空の Markdown ブロックに
+ * src/base/court_doc_rules.md の中の空の Markdown ブロックに
  * src/base/sample.md および src/templates/*.md の内容を挿入し、
  * instructions/ フォルダに保存するスクリプト。
  */
 function setup() {
     const baseDir = path.join(__dirname, 'src', 'base');
     const templatesDir = path.join(__dirname, 'src', 'templates');
-    const instructionPath = path.join(baseDir, 'ai_instruction.md');
+    const instructionPath = path.join(baseDir, 'court_doc_rules.md');
     const outputDir = path.join(__dirname, 'instructions');
 
     if (!fs.existsSync(instructionPath)) {

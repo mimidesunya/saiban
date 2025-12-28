@@ -38,7 +38,8 @@ ${numPages} pages of a Japanese document.
    - **Numbers**: Convert ALL full-width numbers to half-width (e.g., "１" -> "1"). 
    - **Corrections**: Fix obvious OCR errors (0 vs O). Keep original typos with \`(-- as is)\`.
    - **Exclusions**: Omit printed page numbers from body.
-   - **Margins**:
+     - **Redactions**: Replace blacked-out or redacted parts with "■".
+     - **Margins**:
      - Headings text in margins: Format as \`(--# Text)\`.
      - Annotations/Notes in margins: Format as \`(--* Text)\`.
 `;
