@@ -18,13 +18,13 @@ class GeminiBatchProcessor {
     async runInlineBatch(requests, modelId, progressState, displayName = "batch-job") {
         // Check size estimate (rough check)
         const sizeEstimate = JSON.stringify(requests).length;
-        console.log(`[Batch] Request size estimate: ${(sizeEstimate / 1024 / 1024).toFixed(2)} MB`);
+        console.log(`[バッチ] リクエストサイズ見積もり: ${(sizeEstimate / 1024 / 1024).toFixed(2)} MB`);
         
         if (sizeEstimate > 19 * 1024 * 1024) { // 19MB to be safe
-            throw new Error(`Batch request size (${(sizeEstimate / 1024 / 1024).toFixed(2)} MB) exceeds safe limit for inline batch.`);
+            throw new Error(`バッチリクエストサイズ (${(sizeEstimate / 1024 / 1024).toFixed(2)} MB) がインラインバッチの安全制限を超えています。`);
         }
 
-        console.log(`[Batch] Creating batch job with ${requests.length} requests for ${modelId}...`);
+        console.log(`[バッチ] ${modelId} に対して ${requests.length} 件のリクエストでバッチジョブを作成中...`);
         
         let job;
         try {
@@ -34,11 +34,11 @@ class GeminiBatchProcessor {
                 config: { displayName: displayName },
             });
         } catch (e) {
-            console.error("Failed to create batch job:", e);
+            console.error("バッチジョブの作成に失敗しました:", e);
             throw e;
         }
 
-        console.log(`[Batch] Job created: ${job.name}`);
+        console.log(`[バッチ] ジョブが作成されました: ${job.name}`);
         return await this.waitForCompletion(job.name, progressState);
     }
 
@@ -59,29 +59,29 @@ class GeminiBatchProcessor {
                 const remainingRequests = progressState.total - progressState.completed;
                 const estimatedRemaining = avgTimePerRequest * remainingRequests;
 
-                let timeInfo = `Elapsed: ${this.formatTime(elapsed)}`;
+                let timeInfo = `経過時間: ${this.formatTime(elapsed)}`;
                 if (estimatedRemaining > 0) {
-                    timeInfo += ` | Remaining: ${this.formatTime(estimatedRemaining)} (est.)`;
+                    timeInfo += ` | 残り時間（予想）: ${this.formatTime(estimatedRemaining)}`;
                 }
-                console.log(`[Batch] Status: ${cur.state} (${timeInfo})`);
+                console.log(`[バッチ] ステータス: ${cur.state} (${timeInfo})`);
             } else {
-                console.log(`[Batch] Status: ${cur.state} (Waiting 30s...)`);
+                console.log(`[バッチ] ステータス: ${cur.state} (30秒待機中...)`);
             }
             
             await new Promise(r => setTimeout(r, 30000)); // 30 seconds poll
             cur = await this.ai.batches.get({ name: cur.name });
         }
 
-        console.log(`[Batch] Final Status: ${cur.state}`);
+        console.log(`[バッチ] 最終ステータス: ${cur.state}`);
 
         if (cur.state === "JOB_STATE_SUCCEEDED") {
             if (cur.dest && cur.dest.inlinedResponses) {
                 return cur.dest.inlinedResponses;
             } else {
-                throw new Error("Job succeeded but no inlined responses found.");
+                throw new Error("ジョブは成功しましたが、インラインレスポンスが見つかりませんでした。");
             }
         } else {
-            throw new Error(`Batch job failed with state: ${cur.state}`);
+            throw new Error(`バッチジョブが失敗しました。ステータス: ${cur.state}`);
         }
     }
 

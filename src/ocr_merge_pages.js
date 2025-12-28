@@ -14,12 +14,73 @@ const path = require('path');
  */
 function mergeOcrPages(filePath) {
     if (!fs.existsSync(filePath)) {
-        console.error(`[ERROR] File not found: ${filePath}`);
+        console.error(`[エラー] ファイルが見つかりません: ${filePath}`);
         return;
     }
 
     try {
         let content = fs.readFileSync(filePath, 'utf-8');
+
+        // ページ番号の整合性チェック
+        const beginPagePattern = /### -- Begin Page (\d+).*? --/g;
+        const endPagePattern = /### -- End .*? --/g;
+
+        // 物理ページと印字ページの対応関係を抽出
+        const pageInfo = [];
+        const pageBlocks = content.split(/### -- Begin Page \d+.*? --/);
+        const beginMarkers = content.match(beginPagePattern) || [];
+        
+        // splitの結果、最初の要素は最初のBegin Pageより前の内容（通常は空）
+        for (let i = 0; i < beginMarkers.length; i++) {
+            const marker = beginMarkers[i];
+            const pageContent = pageBlocks[i + 1] || "";
+            
+            const physicalMatch = marker.match(/### -- Begin Page (\d+)/);
+            const physicalNum = physicalMatch ? parseInt(physicalMatch[1]) : null;
+            
+            let printedNum = null;
+            const endMatch = pageContent.match(/### -- End .*? --/);
+            if (endMatch) {
+                const pm = endMatch[0].match(/\(Printed Page (\d+)\)/);
+                if (pm) printedNum = parseInt(pm[1]);
+            }
+            
+            if (physicalNum !== null) {
+                pageInfo.push({ physical: physicalNum, printed: printedNum });
+            }
+        }
+
+        const warnings = [];
+
+        // Begin Page (物理連番) のチェック
+        if (pageInfo.length > 0) {
+            for (let i = 0; i < pageInfo.length; i++) {
+                if (i > 0 && pageInfo[i].physical !== pageInfo[i - 1].physical + 1) {
+                    warnings.push(`[警告] Begin Pageの連番に飛びがあります: ${pageInfo[i - 1].physical} -> ${pageInfo[i].physical}`);
+                }
+            }
+            if (pageInfo[0].physical !== 1) {
+                warnings.push(`[警告] Begin Pageが1から始まっていません (開始番号: ${pageInfo[0].physical})`);
+            }
+        }
+
+        // 印字ページ（Printed Page）の整合性チェック
+        const printedInfo = pageInfo.filter(p => p.printed !== null);
+        if (printedInfo.length > 1) {
+            for (let i = 1; i < printedInfo.length; i++) {
+                const prev = printedInfo[i - 1];
+                const curr = printedInfo[i];
+                
+                const physicalDiff = curr.physical - prev.physical;
+                const printedDiff = curr.printed - prev.printed;
+
+                if (printedDiff <= 0) {
+                    warnings.push(`[警告] 印字ページ番号が逆転または重複しています: 物理${prev.physical}P(印字${prev.printed}P) -> 物理${curr.physical}P(印字${curr.printed}P)`);
+                } else if (printedDiff !== physicalDiff) {
+                    warnings.push(`[警告] 印字ページ番号の進みが物理ページと一致しません（ページ抜けの疑い）: 物理${prev.physical}P(印字${prev.printed}P) -> 物理${curr.physical}P(印字${curr.printed}P)`);
+                }
+            }
+        }
 
         // 1. 新しいページ区切り形式の処理
         // パターン: ### -- End ... -- (改行/空白) ### -- Begin Page ... --
@@ -60,10 +121,17 @@ function mergeOcrPages(filePath) {
         }
         
         fs.writeFileSync(outputPath, content, 'utf-8');
-        console.log(`[SUCCESS] Created: ${outputPath}`);
+        console.log(`[成功] 作成されました: ${outputPath}`);
+
+        // 警告のレポート
+        if (warnings.length > 0) {
+            console.log(`\n--- ${fileName} のページ整合性レポート ---`);
+            warnings.forEach(w => console.warn(w));
+            console.log("-----------------------------------------------\n");
+        }
 
     } catch (err) {
-        console.error(`[ERROR] Failed to process ${filePath}: ${err}`);
+        console.error(`[エラー] ${filePath} の処理に失敗しました: ${err}`);
     }
 }
 
@@ -72,7 +140,7 @@ function main() {
     if (args.length === 0) {
         console.log("-------------------------------------------------------");
         console.log(" Markdownファイル（_paged.md）またはフォルダをドロップしてください。");
-        console.log(" Usage: node ocr_merge_pages.js <input_path...>");
+        console.log(" 使い方: node ocr_merge_pages.js <input_path...>");
         console.log("-------------------------------------------------------");
         return;
     }
@@ -80,7 +148,7 @@ function main() {
     for (const arg of args) {
         const inputPath = path.resolve(arg);
         if (!fs.existsSync(inputPath)) {
-            console.error(`[ERROR] Path not found: ${inputPath}`);
+            console.error(`[エラー] パスが見つかりません: ${inputPath}`);
             continue;
         }
         
@@ -95,7 +163,7 @@ function main() {
                     .map(f => path.join(inputPath, f));
             }
                 
-            console.log(`[INFO] Found ${mdFiles.length} Markdown files in ${inputPath}`);
+            console.log(`[情報] ${inputPath} 内に ${mdFiles.length} 個の Markdown ファイルが見つかりました`);
             for (const mdFile of mdFiles) {
                 if (mdFile.endsWith("_merged.md")) {
                     continue;
@@ -106,6 +174,7 @@ function main() {
             mergeOcrPages(inputPath);
         }
     }
+    console.log("\nすべての処理が完了しました。");
 }
 
 if (require.main === module) {

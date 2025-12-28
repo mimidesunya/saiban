@@ -67,8 +67,9 @@ function createOcrRequest(pdfBytes, numPages, contextInstruction = "") {
     };
 }
 
-async function runBatches(requests, batchProcessor, progressState) {
+async function runBatches(requests, metadata, batchProcessor, progressState) {
     let currentBatchRequests = [];
+    let currentBatchMetadata = [];
     let currentBatchSize = 0;
     const MAX_BATCH_SIZE = 19 * 1024 * 1024; // 19MB
     const allResults = [];
@@ -77,7 +78,8 @@ async function runBatches(requests, batchProcessor, progressState) {
         if (currentBatchRequests.length === 0) return;
         
         const batchCount = currentBatchRequests.length;
-        console.log(`[Batch] Sending batch job with ${batchCount} requests...`);
+        const pagesInBatch = currentBatchMetadata.map(m => m.pages.join(',')).join(' | ');
+        console.log(`[バッチ] ${batchCount} 件のリクエストを送信中 (ページ: ${pagesInBatch})...`);
         
         const results = await batchProcessor.runInlineBatch(currentBatchRequests, MODEL_ID, progressState);
         allResults.push(...results);
@@ -88,19 +90,23 @@ async function runBatches(requests, batchProcessor, progressState) {
         const remainingRequests = progressState.total - progressState.completed;
         const estimatedRemaining = avgTimePerRequest * remainingRequests;
 
-        console.log(`[Batch] Completed: ${progressState.completed}/${progressState.total} requests`);
-        console.log(`[Batch] Elapsed: ${formatTime(elapsed)} | Remaining: ${formatTime(estimatedRemaining)} (est.)`);
+        console.log(`[バッチ] 完了: ${progressState.completed}/${progressState.total} リクエスト`);
+        console.log(`[バッチ] 経過時間: ${formatTime(elapsed)} | 残り時間（予想）: ${formatTime(estimatedRemaining)}`);
         
         currentBatchRequests = [];
+        currentBatchMetadata = [];
         currentBatchSize = 0;
     };
 
-    for (const req of requests) {
+    for (let i = 0; i < requests.length; i++) {
+        const req = requests[i];
+        const meta = metadata[i];
         const reqSize = JSON.stringify(req).length;
         if (currentBatchSize + reqSize > MAX_BATCH_SIZE) {
             await processBatch();
         }
         currentBatchRequests.push(req);
+        currentBatchMetadata.push(meta);
         currentBatchSize += reqSize;
     }
 
@@ -109,17 +115,56 @@ async function runBatches(requests, batchProcessor, progressState) {
     return allResults;
 }
 
+function extractPagesFromMarkdown(content) {
+    const pageMap = new Map();
+    const regex = /### -- Begin Page (\d+)/g;
+    let match;
+    const positions = [];
+
+    while ((match = regex.exec(content)) !== null) {
+        positions.push({ pageNum: parseInt(match[1], 10), index: match.index });
+    }
+
+    for (let i = 0; i < positions.length; i++) {
+        const start = positions[i].index;
+        const end = (i + 1 < positions.length) ? positions[i + 1].index : content.length;
+        const pageContent = content.substring(start, end).trim();
+        if (!pageContent.includes("[ERROR: OCR Failed")) {
+            pageMap.set(positions[i].pageNum, pageContent);
+        }
+    }
+    return pageMap;
+}
+
 async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, contextInstruction = "") {
     const pdfBuffer = fs.readFileSync(pdfPath);
     const srcDoc = await PDFDocument.load(pdfBuffer);
     const totalPages = srcDoc.getPageCount();
     
     const actualEndPage = endPage || totalPages;
-    console.log(`[INFO] Processing ${pdfPath} (Pages ${startPage} to ${actualEndPage} of ${totalPages})`);
+    console.log(`[情報] 処理開始: ${pdfPath} (${totalPages} ページ中 ${startPage} から ${actualEndPage} ページまで)`);
+
+    const errorPath = pdfPath.replace(/\.pdf$/i, "_ERROR_paged.md");
+    const normalPath = pdfPath.replace(/\.pdf$/i, "_paged.md");
+    
+    let pageMap = new Map();
+    if (fs.existsSync(errorPath)) {
+        const existingContent = fs.readFileSync(errorPath, 'utf-8');
+        pageMap = extractPagesFromMarkdown(existingContent);
+        if (pageMap.size > 0) {
+            console.log(`[情報] ${errorPath} から再開します (${pageMap.size} ページ完了済み)`);
+        }
+    }
 
     const pageIndices = [];
     for (let i = startPage; i <= actualEndPage; i++) {
-        pageIndices.push(i);
+        if (!pageMap.has(i)) {
+            pageIndices.push(i);
+        }
+    }
+
+    if (pageIndices.length === 0) {
+        console.log(`[情報] すべての対象ページは既に完了しています。`);
     }
 
     // 1. Prepare all requests
@@ -128,7 +173,6 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
     
     for (let i = 0; i < pageIndices.length; i += batchSize) {
         const batch = pageIndices.slice(i, i + batchSize);
-        // console.log(`[INFO] Preparing batch: pages ${batch.join(', ')}`);
 
         const newDoc = await PDFDocument.create();
         for (const pNum of batch) {
@@ -138,12 +182,11 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
 
         const batchPdfBytes = await newDoc.save();
         requests.push(createOcrRequest(Buffer.from(batchPdfBytes), batch.length, contextInstruction));
-        batchMetadata.push({ startPage: batch[0], numPages: batch.length });
+        batchMetadata.push({ startPage: batch[0], numPages: batch.length, pages: batch });
     }
 
     // 2. Run Batch(es) with Retry Logic
     const batchProcessor = new GeminiBatchProcessor();
-    const finalResults = new Array(requests.length).fill(null);
     let pendingIndices = requests.map((_, i) => i);
     let retryCount = 0;
     const MAX_RETRIES = 3;
@@ -156,16 +199,17 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
 
     while (pendingIndices.length > 0) {
         if (retryCount >= MAX_RETRIES) {
-            console.error(`[ERROR] Max retries reached. ${pendingIndices.length} batches failed.`);
+            console.error(`[エラー] リトライ上限に達しました。${pendingIndices.length} 件のバッチが失敗しました。`);
             break;
         }
         
         if (retryCount > 0) {
-            console.log(`[INFO] Retrying ${pendingIndices.length} batches (Attempt ${retryCount}/${MAX_RETRIES})...`);
+            console.log(`[情報] ${pendingIndices.length} 件のバッチをリトライ中 (試行 ${retryCount}/${MAX_RETRIES})...`);
         }
 
         const currentRequests = pendingIndices.map(i => requests[i]);
-        const batchResults = await runBatches(currentRequests, batchProcessor, progressState);
+        const currentMetadata = pendingIndices.map(i => batchMetadata[i]);
+        const batchResults = await runBatches(currentRequests, currentMetadata, batchProcessor, progressState);
 
         const nextPendingIndices = [];
 
@@ -187,14 +231,24 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
                 if (beginCount === meta.numPages && endCount === meta.numPages) {
                     success = true;
                 } else {
-                    console.warn(`[WARN] Batch ${originalIndex} (Pages ${meta.startPage}-${meta.startPage + meta.numPages - 1}) validation failed. Expected ${meta.numPages} markers, found Begin:${beginCount}, End:${endCount}.`);
+                    console.warn(`[警告] バッチ ${originalIndex} (ページ ${meta.pages.join(',')}) の検証に失敗しました。期待されるマーカー数: ${meta.numPages}, 実際: 開始:${beginCount}, 終了:${endCount}。`);
                 }
             } else {
-                console.warn(`[WARN] Batch ${originalIndex} API error: ${JSON.stringify(result.error || "No content")}`);
+                console.warn(`[警告] バッチ ${originalIndex} APIエラー: ${JSON.stringify(result.error || "内容なし")}`);
             }
 
             if (success) {
-                finalResults[originalIndex] = text;
+                // Fix page numbers (Relative -> Absolute)
+                const absoluteText = text.replace(/### -- Begin Page (\d+)/g, (match, p1) => {
+                    const relativePage = parseInt(p1, 10);
+                    const absolutePage = meta.pages[relativePage - 1];
+                    return `### -- Begin Page ${absolutePage}`;
+                });
+                
+                const batchPages = extractPagesFromMarkdown(absoluteText);
+                for (const [pNum, pContent] of batchPages) {
+                    pageMap.set(pNum, pContent);
+                }
             } else {
                 nextPendingIndices.push(originalIndex);
             }
@@ -206,27 +260,27 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
 
     // 3. Assemble results
     let allMarkdown = "";
-    for (let i = 0; i < finalResults.length; i++) {
-        let text = finalResults[i];
-        const meta = batchMetadata[i];
-
-        if (!text) {
-            text = `\n\n[ERROR: OCR Failed for pages ${meta.startPage}-${meta.startPage + meta.numPages - 1} after retries]\n\n`;
+    let hasError = false;
+    for (let i = startPage; i <= actualEndPage; i++) {
+        if (pageMap.has(i)) {
+            allMarkdown += pageMap.get(i) + "\n\n";
         } else {
-             // Fix page numbers (Relative -> Absolute)
-             text = text.replace(/### -- Begin Page (\d+)/g, (match, p1) => {
-                 const relativePage = parseInt(p1, 10);
-                 const absolutePage = meta.startPage + relativePage - 1;
-                 return `### -- Begin Page ${absolutePage}`;
-             });
+            allMarkdown += `### -- Begin Page ${i} --\n\n[ERROR: OCR Failed for page ${i}]\n\n`;
+            hasError = true;
         }
-        allMarkdown += text + "\n\n";
     }
 
-    const outputPath = pdfPath.replace(/\.pdf$/i, "_paged.md");
-    fs.writeFileSync(outputPath, allMarkdown, 'utf-8');
-    console.log(`[SUCCESS] Saved to ${outputPath}`);
-    return outputPath;
+    if (hasError) {
+        fs.writeFileSync(errorPath, allMarkdown, 'utf-8');
+        console.log(`[警告] エラーを含んだ状態で ${errorPath} に保存されました`);
+        if (fs.existsSync(normalPath)) fs.unlinkSync(normalPath);
+        return errorPath;
+    } else {
+        fs.writeFileSync(normalPath, allMarkdown, 'utf-8');
+        console.log(`[成功] ${normalPath} に保存されました`);
+        if (fs.existsSync(errorPath)) fs.unlinkSync(errorPath);
+        return normalPath;
+    }
 }
 
 module.exports = {

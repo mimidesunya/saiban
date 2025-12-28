@@ -175,8 +175,8 @@ async function main() {
                 }
             } else {
                 const defaultHtmlPath = path.join(DEFAULT_TEMPLATE_DIR, DEFAULT_MAIN_HTML);
-                await processFile(defaultHtmlPath, "", true, false);
                 console.log("クリップボードが空です。デフォルトテンプレートを使用します。");
+                await processFile(defaultHtmlPath, "", true, false);
             }
         } catch (err) {
             console.error(`クリップボード取得エラー: ${err}`);
@@ -184,6 +184,7 @@ async function main() {
             await processFile(defaultHtmlPath, "", true, false);
         }
     }
+    console.log("\nすべての処理が完了しました。");
 }
 
 main();

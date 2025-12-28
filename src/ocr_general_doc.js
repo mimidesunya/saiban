@@ -32,7 +32,7 @@ async function main() {
     }
 
     if (showPrompt) {
-        console.log("\n--- Gemini OCR Prompt Template ---");
+        console.log("\n--- Gemini OCR プロンプトテンプレート ---");
         console.log(getOcrPrompt(batchSize, GENERAL_DOC_STYLE));
         console.log("----------------------------------\n");
         return;
@@ -41,7 +41,7 @@ async function main() {
     if (inputPaths.length === 0) {
         console.log("-------------------------------------------------------");
         console.log(" PDFファイルまたはフォルダをドロップしてください。");
-        console.log(" Usage: node ocr_general_doc.js <input_path...> [--batch_size <n>]");
+        console.log(" 使い方: node ocr_general_doc.js <input_path...> [--batch_size <n>]");
         console.log("-------------------------------------------------------");
         return;
     }
@@ -49,7 +49,7 @@ async function main() {
     for (const inputPath of inputPaths) {
         const absPath = path.resolve(inputPath);
         if (!fs.existsSync(absPath)) {
-            console.error(`[ERROR] Path not found: ${absPath}`);
+            console.error(`[エラー] パスが見つかりません: ${absPath}`);
             continue;
         }
 
@@ -59,22 +59,23 @@ async function main() {
                 .sort();
                 
             if (files.length === 0) {
-                console.warn(`[WARN] No PDF files found in directory: ${absPath}`);
+                console.warn(`[警告] ディレクトリ内に PDF ファイルが見つかりませんでした: ${absPath}`);
                 continue;
             }
             
-            console.log(`[INFO] Found ${files.length} PDF files in ${absPath}`);
+            console.log(`[情報] ${absPath} 内に ${files.length} 個の PDF ファイルが見つかりました`);
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const filePath = path.join(absPath, file);
-                console.log(`\n[PROCESS] (${i + 1}/${files.length}) Starting: ${file}`);
+                console.log(`\n[処理] (${i + 1}/${files.length}) 開始: ${file}`);
                 await pdfToText(filePath, batchSize, startPage, endPage, GENERAL_DOC_STYLE);
             }
         } else {
-            console.log(`\n[PROCESS] Starting: ${path.basename(absPath)}`);
+            console.log(`\n[処理] 開始: ${path.basename(absPath)}`);
             await pdfToText(absPath, batchSize, startPage, endPage, GENERAL_DOC_STYLE);
         }
     }
+    console.log("\nすべての処理が完了しました。");
 }
 
 main();

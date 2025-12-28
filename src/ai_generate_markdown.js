@@ -122,7 +122,7 @@ async function main() {
 
             try {
                 const inputText = fs.readFileSync(inputPath, 'utf-8');
-                console.log(`\n[PROCESS] テキストファイルを読み込みました: ${inputPath}`);
+                console.log(`\n[処理] テキストファイルを読み込みました: ${inputPath}`);
                 await processText(inputText, inputPath, config);
             } catch (err) {
                 console.error(`ファイル読み込みエラー: ${err}`);
@@ -159,6 +159,7 @@ async function main() {
             console.error(`クリップボード取得エラー: ${err}`);
         }
     }
+    console.log("\nすべての処理が完了しました。");
 }
 
 main();
