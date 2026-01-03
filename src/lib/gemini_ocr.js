@@ -37,6 +37,7 @@ ${numPages} pages of a Japanese document.
    - **No Indentation**: Standard Markdown paragraphs.
    - **Numbers**: Convert ALL full-width numbers to half-width (e.g., "１" -> "1"). 
    - **Corrections**: Fix obvious OCR errors (0 vs O). Keep original typos with \`(-- as is)\`.
+   - **Visuals**: If there are photos or diagrams, provide an explanation for them in Japanese formatted as \`(--! Explanation)\`.
    - **Exclusions**: Omit printed page numbers from body.
      - **Redactions**: Replace blacked-out or redacted parts with "■".
      - **Margins**:
