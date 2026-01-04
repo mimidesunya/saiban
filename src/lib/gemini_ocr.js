@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { PDFDocument } = require('pdf-lib');
+const AdminZip = require('adm-zip');
 const GeminiBatchProcessor = require('./gemini_batch');
 
 const MODEL_ID = "gemini-3-flash-preview"; 
@@ -46,26 +47,65 @@ ${numPages} pages of a Japanese document.
 `;
 }
 
-function createOcrRequest(pdfBytes, numPages, contextInstruction = "") {
-    const prompt = getOcrPrompt(numPages, contextInstruction);
-    const base64Data = pdfBytes.toString('base64');
+function getWordPrompt(contextInstruction = "") {
+    return `
+# ROLE
+High-precision document transcribing engine converting Japanese Word (.docx) content (XML and associated images) to clean Markdown.
+
+${contextInstruction}
+
+# INPUT
+The following parts represent a Japanese Word (.docx) document:
+1. **XML Content**: The raw \`word/document.xml\` containing text and structural tags.
+2. **Images**: Visuals (photos, diagrams) extracted from the document.
+
+# OUTPUT RULES
+1. **Markdown Only**: No conversational text.
+2. **No Skipping**: Transcribe everything from the very beginning. Use the XML tags to understand the structure (headings, tables, lists) and maintain the correct sequence.
+3. **Page Markers**:
+   - **Start**: At the start of each logical page, output \`### -- Begin Page N --\`.
+     - N: Page index (1-based).
+   - **End**: At the end of each logical page, output \`### -- End {PrintedPageInfo} --\`.
+     - {PrintedPageInfo}: "(Printed Page X)" if a printed page number is identified.
+4. **Transcription Rules**:
+   - **No Indentation**: Standard Markdown paragraphs.
+   - **Numbers**: Convert ALL full-width numbers to half-width.
+   - **Visuals**: Correlate the provided images with their positions in the text/XML. For each, provide a Japanese explanation formatted as \`(--! Explanation)\`.
+   - **Exclusions**: Omit system tags/metadata. Keep the content clean.
+`;
+}
+
+function createDocRequest(contentParts, contextInstruction = "", isWord = false) {
+    const prompt = isWord ? getWordPrompt(contextInstruction) : getOcrPrompt(contentParts.numPages, contextInstruction);
+    
+    const parts = [
+        ...contentParts.dataParts,
+        { text: prompt }
+    ];
 
     return {
         contents: [
             {
                 role: "user",
-                parts: [
-                    {
-                        inlineData: {
-                            mimeType: "application/pdf",
-                            data: base64Data
-                        }
-                    },
-                    { text: prompt }
-                ]
+                parts: parts
             }
         ]
     };
+}
+
+// Keep createOcrRequest for backward compatibility or direct PDF use
+function createOcrRequest(pdfBytes, numPages, contextInstruction = "") {
+    return createDocRequest({
+        dataParts: [
+            {
+                inlineData: {
+                    mimeType: "application/pdf",
+                    data: pdfBytes.toString('base64')
+                }
+            }
+        ],
+        numPages: numPages
+    }, contextInstruction, false);
 }
 
 async function runBatches(requests, metadata, batchProcessor, progressState) {
@@ -284,7 +324,73 @@ async function pdfToText(pdfPath, batchSize = 5, startPage = 1, endPage = null, 
     }
 }
 
+async function docxToText(docxPath, contextInstruction = "") {
+    console.log(`[情報] Word文書(docx)の解析を開始: ${docxPath}`);
+    const normalPath = docxPath.replace(/\.docx$/i, "_paged.md");
+
+    try {
+        const zip = new AdminZip(docxPath);
+        const dataParts = [];
+
+        // 1. 本文XMLの抽出
+        const documentXml = zip.readAsText("word/document.xml");
+        if (documentXml) {
+            dataParts.push({ text: "--- WORD DOCUMENT XML START ---\n" + documentXml + "\n--- WORD DOCUMENT XML END ---" });
+        }
+
+        // 2. 画像ファイルの抽出 (word/media/ 内の全ファイル)
+        const entries = zip.getEntries();
+        for (const entry of entries) {
+            if (entry.entryName.startsWith("word/media/") && !entry.isDirectory) {
+                const buffer = entry.getData();
+                const ext = path.extname(entry.entryName).toLowerCase();
+                let mimeType = "image/jpeg"; // default
+                if (ext === ".png") mimeType = "image/png";
+                else if (ext === ".webp") mimeType = "image/webp";
+                else if (ext === ".gif") mimeType = "image/gif";
+
+                dataParts.push({
+                    inlineData: {
+                        mimeType: mimeType,
+                        data: buffer.toString('base64')
+                    }
+                });
+            }
+        }
+
+        const batchProcessor = new GeminiBatchProcessor();
+        const progressState = {
+            completed: 0,
+            total: 1,
+            startTime: Date.now()
+        };
+
+        const request = createDocRequest(
+            { dataParts: dataParts, numPages: "Unknown" },
+            contextInstruction,
+            true
+        );
+
+        const results = await batchProcessor.runInlineBatch([request], MODEL_ID, progressState);
+        const result = results[0];
+
+        if (!result.error && result.response?.candidates?.[0]?.content?.parts) {
+            let text = result.response.candidates[0].content.parts.map(p => p.text).join('');
+            fs.writeFileSync(normalPath, text, 'utf-8');
+            console.log(`[成功] ${normalPath} に保存されました`);
+            return normalPath;
+        } else {
+            throw new Error(JSON.stringify(result.error || "内容なし"));
+        }
+    } catch (e) {
+        const errorMsg = `[エラー] Word文書の処理に失敗しました: ${e.message}`;
+        console.error(errorMsg);
+        throw e;
+    }
+}
+
 module.exports = {
     pdfToText,
+    docxToText,
     getOcrPrompt
 };

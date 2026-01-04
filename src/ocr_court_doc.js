@@ -6,7 +6,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { pdfToText, getOcrPrompt } = require('./lib/gemini_ocr.js');
+const { pdfToText, docxToText, getOcrPrompt } = require('./lib/gemini_ocr.js');
 
 const samplePath = path.join(__dirname, 'base', 'sample.md');
 let sampleContent = "";
@@ -48,7 +48,7 @@ async function main() {
 
     if (inputPaths.length === 0) {
         console.log("-------------------------------------------------------");
-        console.log(" PDFファイルまたはフォルダをドロップしてください。");
+        console.log(" PDF/Wordファイルまたはフォルダをドロップしてください。");
         console.log(" 使い方: node ocr_court_doc.js <input_path...> [--batch_size <n>]");
         console.log("-------------------------------------------------------");
         return;
@@ -61,26 +61,41 @@ async function main() {
             continue;
         }
 
+        const processFile = async (filePath) => {
+            const ext = path.extname(filePath).toLowerCase();
+            if (ext === ".pdf") {
+                console.log(`\n[PDF 処理] 開始: ${path.basename(filePath)}`);
+                await pdfToText(filePath, batchSize, startPage, endPage, COURT_DOC_STYLE);
+            } else if (ext === ".docx") {
+                console.log(`\n[Word 処理] 開始: ${path.basename(filePath)}`);
+                await docxToText(filePath, COURT_DOC_STYLE);
+            } else {
+                console.warn(`[警告] 未対応のファイル形式です: ${path.basename(filePath)}`);
+            }
+        };
+
         if (fs.statSync(absPath).isDirectory()) {
             const files = fs.readdirSync(absPath)
-                .filter(f => f.toLowerCase().endsWith(".pdf"))
+                .filter(f => {
+                    const ext = f.toLowerCase();
+                    return ext.endsWith(".pdf") || ext.endsWith(".docx");
+                })
                 .sort();
                 
             if (files.length === 0) {
-                console.warn(`[警告] ディレクトリ内に PDF ファイルが見つかりませんでした: ${absPath}`);
+                console.warn(`[警告] ディレクトリ内に PDF または Word ファイルが見つかりませんでした: ${absPath}`);
                 continue;
             }
             
-            console.log(`[情報] ${absPath} 内に ${files.length} 個の PDF ファイルが見つかりました`);
+            console.log(`[情報] ${absPath} 内に ${files.length} 個のファイルが見つかりました`);
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const filePath = path.join(absPath, file);
-                console.log(`\n[処理] (${i + 1}/${files.length}) 開始: ${file}`);
-                await pdfToText(filePath, batchSize, startPage, endPage, COURT_DOC_STYLE);
+                console.log(`\n[進捗] (${i + 1}/${files.length})`);
+                await processFile(filePath);
             }
         } else {
-            console.log(`\n[処理] 開始: ${path.basename(absPath)}`);
-            await pdfToText(absPath, batchSize, startPage, endPage, COURT_DOC_STYLE);
+            await processFile(absPath);
         }
     }
     console.log("\nすべての処理が完了しました。");

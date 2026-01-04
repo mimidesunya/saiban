@@ -1,5 +1,5 @@
 /**
- * 指定されたディレクトリ内の .md と .docx ファイルを、ディレクトリ構造を維持したまま ZIP にまとめるプログラム。
+ * 指定されたディレクトリ内の .md ファイルを、ディレクトリ構造を維持したまま ZIP にまとめるプログラム。
  * ルートにディレクトリ構成を記した README.md を自動生成します。
  * 
  * 使い方:
@@ -33,7 +33,7 @@ function getDirectoryStructure(dir, baseDir, indent = "") {
             }
         } else {
             const ext = path.extname(entry.name).toLowerCase();
-            if (ext === '.md' || ext === '.docx') {
+            if (ext === '.md') {
                 structure += `${indent}📄 ${entry.name}\n`;
             }
         }
@@ -48,7 +48,7 @@ function hasTargetFiles(dir) {
             if (hasTargetFiles(path.join(dir, entry.name))) return true;
         } else {
             const ext = path.extname(entry.name).toLowerCase();
-            if (ext === '.md' || ext === '.docx') return true;
+            if (ext === '.md') return true;
         }
     }
     return false;
@@ -59,7 +59,7 @@ async function main() {
     if (args.length === 0) {
         console.log("-------------------------------------------------------");
         console.log(" ディレクトリをドロップしてください。");
-        console.log(" .md と .docx を抽出して ZIP にまとめます。");
+        console.log(" .md を抽出して ZIP にまとめます。");
         console.log("-------------------------------------------------------");
         return;
     }
@@ -89,7 +89,7 @@ async function main() {
                     addFilesRecursively(fullPath);
                 } else {
                     const ext = path.extname(entry.name).toLowerCase();
-                    if (ext === '.md' || ext === '.docx') {
+                    if (ext === '.md') {
                         const zipInternalPath = path.dirname(relPath);
                         // rootの場合は空文字列にする
                         const zipPathInZip = zipInternalPath === '.' ? "" : zipInternalPath;
@@ -103,7 +103,7 @@ async function main() {
         addFilesRecursively(targetDir);
 
         if (fileCount === 0) {
-            console.warn(`[警告] ${dirName} 内に .md または .docx ファイルが見つかりませんでした`);
+            console.warn(`[警告] ${dirName} 内に .md ファイルが見つかりませんでした`);
             continue;
         }
 
@@ -122,7 +122,7 @@ async function main() {
         let readmeContent = `# Project Archive for AI Analysis
 
 This archive contains documentation and manuscripts extracted from \`${dirName}\`.
-Only \`.md\` and \`.docx\` files are included to keep the context relevant for AI analysis.
+Only \`.md\` files are included to keep the context relevant for AI analysis.
 
 ## Directory Structure
 
