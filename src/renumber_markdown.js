@@ -1,0 +1,156 @@
+const fs = require('fs');
+const path = require('path');
+
+// SAIBAN Markdown Renumbering Tool (JS Port)
+// Corrects numbering inconsistencies in legal markdown documents.
+
+const KATAKANA = [
+    'ア', 'イ', 'ウ', 'エ', 'オ',
+    'カ', 'キ', 'ク', 'ケ', 'コ',
+    'サ', 'シ', 'ス', 'セ', 'ソ',
+    'タ', 'チ', 'ツ', 'テ', 'ト',
+    'ナ', 'ニ', 'ヌ', 'ネ', 'ノ',
+    'ハ', 'ヒ', 'フ', 'ヘ', 'ホ',
+    'マ', 'ミ', 'ム', 'メ', 'モ',
+    'ヤ', 'ユ', 'ヨ',
+    'ラ', 'リ', 'ル', 'レ', 'ロ',
+    'ワ', 'ヲ', 'ン'
+];
+const ALPHABET = "abcdefghijklmnopqrstuvwxyz".split("");
+
+function getKatakana(n) {
+    if (n < 1) return "?";
+    const idx = (n - 1) % KATAKANA.length;
+    return KATAKANA[idx];
+}
+
+function getAlphabet(n) {
+    if (n < 1) return "?";
+    const idx = (n - 1) % ALPHABET.length;
+    return ALPHABET[idx];
+}
+
+// Defined patterns for headers
+// Each object: { level: number, str: string }
+const MARKER_DEFS = [
+    { level: 1, str: '第[0-9]+' },
+    { level: 2, str: '[0-9]+' },
+    { level: 3, str: '\\([0-9]+\\)' },
+    { level: 4, str: '[ア-ン]' },
+    { level: 5, str: '\\([ア-ン]\\)' },
+    { level: 6, str: '[a-z]' },
+    { level: 7, str: '\\([a-z]\\)' },
+];
+
+// Compile Regexes
+const REGEX_LIST = MARKER_DEFS.map(def => {
+    // JS Regex: ^(##\s*)?(MARKER)([\s\u3000].*)?$
+    // We use [\s\u3000] to match whitespace including full-width space.
+    const patternStr = `^(##\\s*)?(${def.str})([\\s\\u3000].*)?$`;
+    return {
+        level: def.level,
+        re: new RegExp(patternStr)
+    };
+});
+
+function renumberLines(lines) {
+    const counters = new Array(8).fill(0);
+    const outputLines = [];
+
+    for (let line of lines) {
+        // Strip newline chars for processing, but we'll add them back or join later
+        // In python I did rstrip. Here split by newline usually gives lines without \n (except maybe the last one).
+        // Let's assume input is array of strings without newlines.
+        
+        // We'll handle the actual string content.
+        const originalLine = line; // keep ref if needed? No, we reconstruct.
+        
+        let matchedLevel = -1;
+        let matchResult = null;
+
+        for (const item of REGEX_LIST) {
+            const m = item.re.exec(line);
+            if (m) {
+                matchedLevel = item.level;
+                matchResult = m;
+                break;
+            }
+        }
+
+        if (matchedLevel !== -1) {
+            // Update counters
+            counters[matchedLevel]++;
+            for (let i = matchedLevel + 1; i < 8; i++) {
+                counters[i] = 0;
+            }
+
+            const currentNum = counters[matchedLevel];
+            let newMarker = "";
+
+            switch (matchedLevel) {
+                case 1: newMarker = `第${currentNum}`; break;
+                case 2: newMarker = `${currentNum}`; break;
+                case 3: newMarker = `(${currentNum})`; break;
+                case 4: newMarker = getKatakana(currentNum); break;
+                case 5: newMarker = `(${getKatakana(currentNum)})`; break;
+                case 6: newMarker = getAlphabet(currentNum); break;
+                case 7: newMarker = `(${getAlphabet(currentNum)})`; break;
+            }
+
+            // Reconstruct
+            // Group 1: Prefix (matchResult[1])
+            // Group 2: Marker (matchResult[2]) - replaced
+            // Group 3: Suffix (matchResult[3])
+            
+            const prefix = matchResult[1] || "";
+            const suffix = matchResult[3] || "";
+            
+            outputLines.push(`${prefix}${newMarker}${suffix}`);
+        } else {
+            outputLines.push(line);
+        }
+    }
+
+    return outputLines;
+}
+
+function main() {
+    if (process.argv.length < 3) {
+        console.log("Usage: node renumber_markdown.js <input_file> [output_file]");
+        process.exit(1);
+    }
+
+    const inputPath = process.argv[2];
+    let outputPath;
+
+    if (process.argv.length >= 4) {
+        outputPath = process.argv[3];
+    } else {
+        const parsed = path.parse(inputPath);
+        outputPath = path.join(parsed.dir, `${parsed.name}_renumbered${parsed.ext}`);
+    }
+
+    try {
+        const content = fs.readFileSync(inputPath, 'utf8');
+        // split by regex to handle \r\n, \n, \r
+        const lines = content.split(/\r?\n/);
+        
+        // If the last line is empty (caused by trailing newline), pop it to avoid double newline issues? 
+        // Or just re-join with initial platform style?
+        // Let's keep it simple. split might imply an empty string at the end if file ends with newline.
+        
+        const renumbered = renumberLines(lines);
+
+        const outputContent = renumbered.join('\n');
+        
+        fs.writeFileSync(outputPath, outputContent, 'utf8');
+        console.log(`Renumbered file saved to ${outputPath}`);
+    } catch (e) {
+        console.error(`Error: ${e.message}`);
+        process.exit(1);
+    }
+}
+
+if (require.main === module) {
+    main();
+}
